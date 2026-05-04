@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prédiction Coût de Revente</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e8e8e0;
+    --muted: #666;
+    --accent: #c8f560;
+    --accent-dim: #8fb840;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  .header { margin-bottom: 2.5rem; }
+  .header-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+  h1 {
+    font-size: 26px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 1rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: var(--accent); }
+  .dot.loading { background: #f5a623; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .load-section {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  .load-section p { font-size: 13px; color: var(--muted); margin-bottom: 1rem; }
+  .file-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .file-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .file-label span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .file-btn {
+    padding: 7px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .file-btn:hover { border-color: var(--accent); }
+  .file-btn.loaded { border-color: var(--accent); color: var(--accent); }
+  input[type="file"] { display: none; }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 1.5rem;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .field input, .field select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select option { background: #1a1a1a; }
+
+  .rapport-field { margin-bottom: 1.5rem; }
+  .rapport-field label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 90px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  .predict-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #0f0f0f;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+  }
+  .predict-btn:hover { background: #d4ff70; }
+  .predict-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .error {
+    margin-top: 10px;
+    padding: 10px 14px;
+    border: 1px solid #5a2020;
+    border-radius: 4px;
+    background: #1f1010;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #e05555;
+    display: none;
+  }
+
+  .result {
+    margin-top: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    display: none;
+  }
+  .result-header {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .result-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .result-price {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 500;
+    color: var(--accent);
+  }
+  .result-body { padding: 1.25rem; }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row .key { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+  .result-row .val { color: var(--text); font-weight: 400; text-align: right; max-width: 60%; }
+
+  .top-features {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .top-features-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+  .feat-bar { margin-bottom: 7px; }
+  .feat-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 3px;
+    color: var(--text);
+    font-family: var(--font-mono);
+  }
+  .feat-bar-label .feat-val { color: var(--muted); }
+  .bar-track {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  @media (max-width: 500px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-tag">Système de prédiction ML</div>
+    <h1>Coût de revente<br>de déchets collectés</h1>
+    <div class="status-bar">
+      <div class="dot" id="dot-tfidf"></div>
+      <span id="status-tfidf">TF-IDF non chargé</span>
+      &nbsp;·&nbsp;
+      <div class="dot" id="dot-model"></div>
+      <span id="status-model">Modèle non chargé</span>
+    </div>
+  </div>
+
+  <!-- Chargement des fichiers JSON -->
+  <div class="load-section">
+    <p>Charge les fichiers exportés par <code>export_model.py</code></p>
+    <div class="file-row">
+      <label class="file-label">
+        <button class="file-btn" id="btn-tfidf" onclick="document.getElementById('inp-tfidf').click()">
+          tfidf_vectorizer.json
+        </button>
+        <span id="lbl-tfidf">non chargé</span>
+        <input type="file" id="inp-tfidf" accept=".json" onchange="loadTFIDF(this)"/>
+      </label>
+      <label class="file-label">
+        <button class="file-btn" id="btn-model" onclick="document.getElementById('inp-model').click()">
+          ridge_model.json
+        </button>
+        <span id="lbl-model">non chargé</span>
+        <input type="file" id="inp-model" accept=".json" onchange="loadModel(this)"/>
+      </label>
+    </div>
+  </div>
+
+  <!-- Formulaire -->
+  <div class="form-grid">
+    <div class="field">
+      <label>Source</label>
+      <!-- FIX Bug 3 : valeurs alignées avec encoder_categories du modèle -->
+      <select id="source">
+        <option value="Centre_Tri">Centre de tri</option>
+        <option value="Collecte_Citoyenne">Collecte citoyenne</option>
+        <option value="Usine_A">Usine A</option>
+        <option value="Usine_B">Usine B</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Catégorie</label>
+      <select id="categorie">
+        <option value="Plastique">Plastique</option>
+        <option value="Verre">Verre</option>
+        <option value="Papier">Papier</option>
+        <option value="Métal">Métal</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Poids (kg)</label>
+      <input type="number" id="poids" placeholder="2.5" min="0" step="0.1"/>
+    </div>
+    <div class="field">
+      <label>Volume (L)</label>
+      <input type="number" id="volume" placeholder="5.0" min="0" step="0.1"/>
+    </div>
+    <div class="field">
+      <label>Conductivité</label>
+      <input type="number" id="conductivite" placeholder="0.85" step="0.01"/>
+    </div>
+    <div class="field">
+      <label>Opacité</label>
+      <input type="number" id="opacite" placeholder="0.6" min="0" max="1" step="0.01"/>
+    </div>
+    <div class="field">
+      <label>Rigidité</label>
+      <input type="number" id="rigidite" placeholder="3.2" step="0.1"/>
+    </div>
+  </div>
+
+  <div class="rapport-field">
+    <label>Rapport de collecte (texte NLP)</label>
+    <textarea id="rapport" placeholder="Ex: Objet plastique rigide, légèrement endommagé, provenant d'un ménage. Composé de polyéthylène haute densité..."></textarea>
+  </div>
+
+  <button class="predict-btn" id="btn-predict" onclick="predict()" disabled>
+    CHARGER LES MODÈLES D'ABORD
+  </button>
+  <div class="error" id="err"></div>
+
+  <!-- Résultat -->
+  <div class="result" id="result">
+    <div class="result-header">
+      <span class="result-label">Prix estimé</span>
+      <span class="result-price" id="out-price">—</span>
+    </div>
+    <div class="result-body">
+      <div class="result-row">
+        <span class="key">contribution numérique</span>
+        <span class="val" id="out-num">—</span>
+      </div>
+      <div class="result-row">
+        <span class="key">contribution texte (NLP)</span>
+        <span class="val" id="out-nlp">—</span>
+      </div>
+      <div class="result-row">
+        <span class="key">contribution source</span>
+        <span class="val" id="out-cat">—</span>
+      </div>
+      <div class="top-features" id="top-features-block">
+        <div class="top-features-title">Mots les plus influents (TF-IDF)</div>
+        <div id="feat-bars"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+let TFIDF = null;
+let MODEL = null;
+
+// ── Chargement fichiers ──────────────────────────────────────────
+function loadTFIDF(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      TFIDF = JSON.parse(e.target.result);
+      document.getElementById('dot-tfidf').className = 'dot ok';
+      document.getElementById('status-tfidf').textContent = 'TF-IDF chargé (' + Object.keys(TFIDF.vocabulary).length + ' mots)';
+      document.getElementById('btn-tfidf').className = 'file-btn loaded';
+      document.getElementById('lbl-tfidf').textContent = file.name;
+      checkReady();
+    } catch(e) { showErr('tfidf_vectorizer.json invalide'); }
+  };
+  reader.readAsText(file);
+}
+
+function loadModel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      MODEL = JSON.parse(e.target.result);
+      document.getElementById('dot-model').className = 'dot ok';
+      document.getElementById('status-model').textContent = 'Modèle chargé (' + MODEL.feature_names.length + ' features)';
+      document.getElementById('btn-model').className = 'file-btn loaded';
+      document.getElementById('lbl-model').textContent = file.name;
+      checkReady();
+    } catch(e) { showErr('ridge_model.json invalide'); }
+  };
+  reader.readAsText(file);
+}
+
+function checkReady() {
+  if (TFIDF && MODEL) {
+    const btn = document.getElementById('btn-predict');
+    btn.disabled = false;
+    btn.textContent = 'PRÉDIRE LE PRIX DE REVENTE';
+  }
+}
+
+// ── Tokenisation alignée avec sklearn TfidfVectorizer (pattern \b\w\w+\b) ──
+// FIX Bug 4 : \w inclut chiffres et underscore, comme sklearn par défaut
+function tokenize(text) {
+  // sklearn utilise le pattern (?u)\b\w\w+\b — on reproduit avec \w (alphanum + _)
+  const tokens = text.toLowerCase().match(/\b\w[\wáàâäéèêëîïôöùûüç]+\b/g) || [];
+  return tokens;
+}
+
+// ── TF-IDF manuel ────────────────────────────────────────────────
+function computeTFIDF(text) {
+  const vocab = TFIDF.vocabulary;
+  const idf   = TFIDF.idf;
+  const n     = TFIDF.max_features;
+  const vec   = new Array(n).fill(0);
+
+  const tokens = tokenize(text);
+  if (tokens.length === 0) return vec;
+
+  // TF : fréquence brute
+  const tf = {};
+  for (const t of tokens) {
+    if (vocab.hasOwnProperty(t)) {
+      tf[t] = (tf[t] || 0) + 1;
+    }
+  }
+
+  // TF-IDF
+  for (const [word, idx] of Object.entries(vocab)) {
+    if (tf[word]) {
+      vec[idx] = (tf[word] / tokens.length) * idf[idx];
+    }
+  }
+
+  // L2 normalisation (comme sklearn)
+  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+  if (norm > 0) return vec.map(v => v / norm);
+  return vec;
+}
+
+// ── Prédiction ───────────────────────────────────────────────────
+function predict() {
+  document.getElementById('err').style.display = 'none';
+
+  const rapport = document.getElementById('rapport').value.trim();
+  const poids   = parseFloat(document.getElementById('poids').value);
+  const volume  = parseFloat(document.getElementById('volume').value);
+
+  if (!rapport || isNaN(poids) || isNaN(volume)) {
+    showErr('Remplis au moins Poids, Volume et le Rapport de collecte.');
+    return;
+  }
+
+  const conductivite = parseFloat(document.getElementById('conductivite').value) || 0;
+  const opacite      = parseFloat(document.getElementById('opacite').value) || 0;
+  const rigidite     = parseFloat(document.getElementById('rigidite').value) || 0;
+  const source       = document.getElementById('source').value;
+  const categorie    = document.getElementById('categorie').value;
+
+  // 1. Features numériques → standardisation
+  const numRaw = [poids, volume, conductivite, opacite, rigidite];
+  const numScaled = numRaw.map((v, i) =>
+    (v - MODEL.scaler_mean[i]) / MODEL.scaler_scale[i]
+  );
+
+  // 2. Encodage One-Hot de toutes les colonnes catégorielles (Source + Categorie)
+  const catFeats = [];
+  const catInputs = { Source: source, Categorie: categorie };
+  for (const [col, cats] of Object.entries(MODEL.encoder_categories)) {
+    for (const cat of cats) {
+      catFeats.push(catInputs[col] === cat ? 1 : 0);
+    }
+  }
+
+  // 3. TF-IDF du rapport
+  const tfidfVec = computeTFIDF(rapport);
+
+  // 4. Vecteur final
+  const x = [...numScaled, ...catFeats, ...tfidfVec];
+
+  // 5. Produit scalaire Ridge
+  let price = MODEL.intercept;
+  const coefs = MODEL.coefficients;
+  for (let i = 0; i < x.length; i++) price += coefs[i] * x[i];
+
+  // Contributions par bloc
+  const numCols  = MODEL.scaler_features.length;
+  const catCols  = catFeats.length;
+  const tfidfOffset = numCols + catCols;
+
+  let contribNum = MODEL.intercept;
+  for (let i = 0; i < numCols; i++) contribNum += coefs[i] * x[i];
+
+  let contribCat = 0;
+  for (let i = numCols; i < tfidfOffset; i++) contribCat += coefs[i] * x[i];
+
+  let contribNLP = 0;
+  for (let i = tfidfOffset; i < x.length; i++) contribNLP += coefs[i] * x[i];
+
+  // Affichage
+  document.getElementById('out-price').textContent = price.toFixed(2) + ' €';
+  document.getElementById('out-num').textContent   = (contribNum >= 0 ? '+' : '') + contribNum.toFixed(2) + ' €';
+  document.getElementById('out-nlp').textContent   = (contribNLP >= 0 ? '+' : '') + contribNLP.toFixed(2) + ' €';
+  document.getElementById('out-cat').textContent   = (contribCat >= 0 ? '+' : '') + contribCat.toFixed(2) + ' €';
+
+  // Top mots influents
+  const vocab = TFIDF.vocabulary;
+  const words = Object.entries(vocab)
+    .map(([word, idx]) => ({
+      word,
+      impact: Math.abs(coefs[tfidfOffset + idx] * tfidfVec[idx])
+    }))
+    .filter(d => d.impact > 0)
+    .sort((a, b) => b.impact - a.impact)
+    .slice(0, 6);
+
+  const maxImpact = words[0]?.impact || 1;
+  const barsDiv = document.getElementById('feat-bars');
+  barsDiv.innerHTML = words.map(d => `
+    <div class="feat-bar">
+      <div class="feat-bar-label">
+        <span>${d.word}</span>
+        <span class="feat-val">${(d.impact).toFixed(4)}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(d.impact/maxImpact*100).toFixed(1)}%"></div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('result').style.display = 'block';
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
