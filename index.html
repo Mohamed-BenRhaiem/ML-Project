@@ -3,18 +3,21 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Prédiction Coût de Revente</title>
+<title>Eco-Smart Classifier</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
 
   :root {
-    --bg: #0f0f0f;
-    --surface: #1a1a1a;
-    --border: #2a2a2a;
-    --text: #e8e8e0;
-    --muted: #666;
-    --accent: #c8f560;
-    --accent-dim: #8fb840;
+    --bg: #f7f7f4;
+    --surface: #ffffff;
+    --border: #e2e2dc;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #2f7a2f;
+    --accent-hover: #246124;
+    --error-bg: #fff5f5;
+    --error-border: #f0c2c2;
+    --error-text: #b91c1c;
     --font-sans: 'IBM Plex Sans', sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
   }
@@ -59,48 +62,12 @@
   .dot {
     width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--muted);
+    background: #c2c2bc;
     flex-shrink: 0;
   }
   .dot.ok { background: var(--accent); }
-  .dot.loading { background: #f5a623; animation: pulse 1s infinite; }
+  .dot.loading { background: #d97706; animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  .load-section {
-    border: 1px dashed var(--border);
-    border-radius: 6px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    text-align: center;
-  }
-  .load-section p { font-size: 13px; color: var(--muted); margin-bottom: 1rem; }
-  .file-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .file-label {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
-  .file-label span {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .file-btn {
-    padding: 7px 16px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--surface);
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    cursor: pointer;
-    transition: border-color 0.2s;
-  }
-  .file-btn:hover { border-color: var(--accent); }
-  .file-btn.loaded { border-color: var(--accent); color: var(--accent); }
-  input[type="file"] { display: none; }
 
   .form-grid {
     display: grid;
@@ -129,7 +96,7 @@
     width: 100%;
   }
   .field input:focus, .field select:focus { border-color: var(--accent); }
-  .field select option { background: #1a1a1a; }
+  .field select option { background: var(--surface); color: var(--text); }
 
   .rapport-field { margin-bottom: 1.5rem; }
   .rapport-field label {
@@ -163,7 +130,7 @@
     width: 100%;
     padding: 12px;
     background: var(--accent);
-    color: #0f0f0f;
+    color: #ffffff;
     border: none;
     border-radius: 4px;
     font-family: var(--font-mono);
@@ -173,18 +140,18 @@
     cursor: pointer;
     transition: background 0.2s, opacity 0.2s;
   }
-  .predict-btn:hover { background: #d4ff70; }
-  .predict-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .predict-btn:hover { background: var(--accent-hover); }
+  .predict-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .error {
     margin-top: 10px;
     padding: 10px 14px;
-    border: 1px solid #5a2020;
+    border: 1px solid var(--error-border);
     border-radius: 4px;
-    background: #1f1010;
+    background: var(--error-bg);
     font-family: var(--font-mono);
     font-size: 12px;
-    color: #e05555;
+    color: var(--error-text);
     display: none;
   }
 
@@ -194,9 +161,11 @@
     border-radius: 6px;
     overflow: hidden;
     display: none;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
   }
   .result-header {
-    background: var(--surface);
+    background: #f0f0eb;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border);
     display: flex;
@@ -274,58 +243,19 @@
 <div class="container">
 
   <div class="header">
-    <div class="header-tag">Système de prédiction ML</div>
-    <h1>Coût de revente<br>de déchets collectés</h1>
+    <div class="header-tag">Eco-Smart Classifier</div>
+    <h1>Classification du matériau<br>+ prix de revente estimé</h1>
     <div class="status-bar">
-      <div class="dot" id="dot-tfidf"></div>
-      <span id="status-tfidf">TF-IDF non chargé</span>
-      &nbsp;·&nbsp;
-      <div class="dot" id="dot-model"></div>
-      <span id="status-model">Modèle non chargé</span>
+      <div class="dot loading" id="dot-api"></div>
+      <span id="status-api">Connexion à l'API…</span>
     </div>
   </div>
 
-  <!-- Chargement des fichiers JSON -->
-  <div class="load-section">
-    <p>Charge les fichiers exportés par <code>export_model.py</code></p>
-    <div class="file-row">
-      <label class="file-label">
-        <button class="file-btn" id="btn-tfidf" onclick="document.getElementById('inp-tfidf').click()">
-          tfidf_vectorizer.json
-        </button>
-        <span id="lbl-tfidf">non chargé</span>
-        <input type="file" id="inp-tfidf" accept=".json" onchange="loadTFIDF(this)"/>
-      </label>
-      <label class="file-label">
-        <button class="file-btn" id="btn-model" onclick="document.getElementById('inp-model').click()">
-          ridge_model.json
-        </button>
-        <span id="lbl-model">non chargé</span>
-        <input type="file" id="inp-model" accept=".json" onchange="loadModel(this)"/>
-      </label>
-    </div>
-  </div>
-
-  <!-- Formulaire -->
+  <!-- Formulaire (Categorie est PRÉDITE, plus saisie) -->
   <div class="form-grid">
     <div class="field">
       <label>Source</label>
-      <!-- FIX Bug 3 : valeurs alignées avec encoder_categories du modèle -->
-      <select id="source">
-        <option value="Centre_Tri">Centre de tri</option>
-        <option value="Collecte_Citoyenne">Collecte citoyenne</option>
-        <option value="Usine_A">Usine A</option>
-        <option value="Usine_B">Usine B</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Catégorie</label>
-      <select id="categorie">
-        <option value="Plastique">Plastique</option>
-        <option value="Verre">Verre</option>
-        <option value="Papier">Papier</option>
-        <option value="Métal">Métal</option>
-      </select>
+      <select id="source"></select>
     </div>
     <div class="field">
       <label>Poids (kg)</label>
@@ -355,14 +285,28 @@
   </div>
 
   <button class="predict-btn" id="btn-predict" onclick="predict()" disabled>
-    CHARGER LES MODÈLES D'ABORD
+    CONNEXION À L'API…
   </button>
   <div class="error" id="err"></div>
 
-  <!-- Résultat -->
-  <div class="result" id="result">
+  <!-- Résultat classification -->
+  <div class="result" id="result-clf">
     <div class="result-header">
-      <span class="result-label">Prix estimé</span>
+      <span class="result-label">Catégorie prédite</span>
+      <span class="result-price" id="out-category">—</span>
+    </div>
+    <div class="result-body">
+      <div class="top-features">
+        <div class="top-features-title">Probabilités par classe</div>
+        <div id="proba-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Résultat régression -->
+  <div class="result" id="result-reg">
+    <div class="result-header">
+      <span class="result-label">Prix de revente estimé</span>
       <span class="result-price" id="out-price">—</span>
     </div>
     <div class="result-body">
@@ -387,93 +331,58 @@
 
 </div>
 <script>
-let TFIDF = null;
-let MODEL = null;
+// API : même origine si servie par FastAPI, sinon 127.0.0.1:8000
+const API_BASE = (location.protocol === 'file:' || !location.host)
+  ? 'http://127.0.0.1:8000'
+  : '';
 
-// ── Chargement fichiers ──────────────────────────────────────────
-function loadTFIDF(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      TFIDF = JSON.parse(e.target.result);
-      document.getElementById('dot-tfidf').className = 'dot ok';
-      document.getElementById('status-tfidf').textContent = 'TF-IDF chargé (' + Object.keys(TFIDF.vocabulary).length + ' mots)';
-      document.getElementById('btn-tfidf').className = 'file-btn loaded';
-      document.getElementById('lbl-tfidf').textContent = file.name;
-      checkReady();
-    } catch(e) { showErr('tfidf_vectorizer.json invalide'); }
-  };
-  reader.readAsText(file);
-}
+const LABELS = {
+  Source: {
+    Centre_Tri: 'Centre de tri',
+    Collecte_Citoyenne: 'Collecte citoyenne',
+    Usine_A: 'Usine A',
+    Usine_B: 'Usine B'
+  }
+};
 
-function loadModel(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      MODEL = JSON.parse(e.target.result);
-      document.getElementById('dot-model').className = 'dot ok';
-      document.getElementById('status-model').textContent = 'Modèle chargé (' + MODEL.feature_names.length + ' features)';
-      document.getElementById('btn-model').className = 'file-btn loaded';
-      document.getElementById('lbl-model').textContent = file.name;
-      checkReady();
-    } catch(e) { showErr('ridge_model.json invalide'); }
-  };
-  reader.readAsText(file);
-}
+let META = null;
 
-function checkReady() {
-  if (TFIDF && MODEL) {
+// ── Init : récupère metadata et peuple les <select> ──────────────
+async function init() {
+  try {
+    const r = await fetch(API_BASE + '/metadata');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    META = await r.json();
+
+    fillSelect('source', META.categories.Source || [], 'Source');
+
+    document.getElementById('dot-api').className = 'dot ok';
+    document.getElementById('status-api').textContent =
+      'API connectée · classif=' + META.clf_model + ' · régression=' + META.reg_model;
+
     const btn = document.getElementById('btn-predict');
     btn.disabled = false;
-    btn.textContent = 'PRÉDIRE LE PRIX DE REVENTE';
+    btn.textContent = 'CLASSIFIER + ESTIMER LE PRIX';
+  } catch (e) {
+    document.getElementById('dot-api').className = 'dot';
+    document.getElementById('status-api').textContent =
+      'API hors ligne — lance : uvicorn main:app --reload';
+    showErr('Impossible de joindre l\'API : ' + e.message);
   }
 }
 
-// ── Tokenisation alignée avec sklearn TfidfVectorizer (pattern \b\w\w+\b) ──
-// FIX Bug 4 : \w inclut chiffres et underscore, comme sklearn par défaut
-function tokenize(text) {
-  // sklearn utilise le pattern (?u)\b\w\w+\b — on reproduit avec \w (alphanum + _)
-  const tokens = text.toLowerCase().match(/\b\w[\wáàâäéèêëîïôöùûüç]+\b/g) || [];
-  return tokens;
+function fillSelect(id, values, col) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = values
+    .map(v => {
+      const label = (LABELS[col] && LABELS[col][v]) || v;
+      return `<option value="${v}">${label}</option>`;
+    })
+    .join('');
 }
 
-// ── TF-IDF manuel ────────────────────────────────────────────────
-function computeTFIDF(text) {
-  const vocab = TFIDF.vocabulary;
-  const idf   = TFIDF.idf;
-  const n     = TFIDF.max_features;
-  const vec   = new Array(n).fill(0);
-
-  const tokens = tokenize(text);
-  if (tokens.length === 0) return vec;
-
-  // TF : fréquence brute
-  const tf = {};
-  for (const t of tokens) {
-    if (vocab.hasOwnProperty(t)) {
-      tf[t] = (tf[t] || 0) + 1;
-    }
-  }
-
-  // TF-IDF
-  for (const [word, idx] of Object.entries(vocab)) {
-    if (tf[word]) {
-      vec[idx] = (tf[word] / tokens.length) * idf[idx];
-    }
-  }
-
-  // L2 normalisation (comme sklearn)
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-  if (norm > 0) return vec.map(v => v / norm);
-  return vec;
-}
-
-// ── Prédiction ───────────────────────────────────────────────────
-function predict() {
+// ── Prédiction via API ───────────────────────────────────────────
+async function predict() {
   document.getElementById('err').style.display = 'none';
 
   const rapport = document.getElementById('rapport').value.trim();
@@ -485,76 +394,74 @@ function predict() {
     return;
   }
 
-  const conductivite = parseFloat(document.getElementById('conductivite').value) || 0;
-  const opacite      = parseFloat(document.getElementById('opacite').value) || 0;
-  const rigidite     = parseFloat(document.getElementById('rigidite').value) || 0;
-  const source       = document.getElementById('source').value;
-  const categorie    = document.getElementById('categorie').value;
+  const payload = {
+    Source:           document.getElementById('source').value,
+    Poids:            poids,
+    Volume:           volume,
+    Conductivite:     parseFloat(document.getElementById('conductivite').value) || 0,
+    Opacite:          parseFloat(document.getElementById('opacite').value) || 0,
+    Rigidite:         parseFloat(document.getElementById('rigidite').value) || 0,
+    Rapport_Collecte: rapport
+  };
 
-  // 1. Features numériques → standardisation
-  const numRaw = [poids, volume, conductivite, opacite, rigidite];
-  const numScaled = numRaw.map((v, i) =>
-    (v - MODEL.scaler_mean[i]) / MODEL.scaler_scale[i]
-  );
+  const btn = document.getElementById('btn-predict');
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'PRÉDICTION EN COURS…';
 
-  // 2. Encodage One-Hot de toutes les colonnes catégorielles (Source + Categorie)
-  const catFeats = [];
-  const catInputs = { Source: source, Categorie: categorie };
-  for (const [col, cats] of Object.entries(MODEL.encoder_categories)) {
-    for (const cat of cats) {
-      catFeats.push(catInputs[col] === cat ? 1 : 0);
+  try {
+    const r = await fetch(API_BASE + '/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: 'Erreur ' + r.status }));
+      throw new Error(err.detail || 'Erreur ' + r.status);
     }
+    const data = await r.json();
+    renderResult(data);
+  } catch (e) {
+    showErr('Prédiction échouée : ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
   }
+}
 
-  // 3. TF-IDF du rapport
-  const tfidfVec = computeTFIDF(rapport);
+function renderResult(data) {
+  // ─── Classification ───
+  document.getElementById('out-category').textContent = data.predicted_category;
 
-  // 4. Vecteur final
-  const x = [...numScaled, ...catFeats, ...tfidfVec];
+  const probas = data.class_probabilities || [];
+  document.getElementById('proba-bars').innerHTML = probas.map(p => `
+    <div class="feat-bar">
+      <div class="feat-bar-label">
+        <span>${p.label}</span>
+        <span class="feat-val">${(p.proba * 100).toFixed(1)}%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(p.proba * 100).toFixed(1)}%"></div>
+      </div>
+    </div>
+  `).join('');
 
-  // 5. Produit scalaire Ridge
-  let price = MODEL.intercept;
-  const coefs = MODEL.coefficients;
-  for (let i = 0; i < x.length; i++) price += coefs[i] * x[i];
+  // ─── Régression ───
+  document.getElementById('out-price').textContent = data.price.toFixed(2) + ' €';
+  document.getElementById('out-num').textContent =
+    (data.contrib_num >= 0 ? '+' : '') + data.contrib_num.toFixed(2) + ' €';
+  document.getElementById('out-nlp').textContent =
+    (data.contrib_nlp >= 0 ? '+' : '') + data.contrib_nlp.toFixed(2) + ' €';
+  document.getElementById('out-cat').textContent =
+    (data.contrib_cat >= 0 ? '+' : '') + data.contrib_cat.toFixed(2) + ' €';
 
-  // Contributions par bloc
-  const numCols  = MODEL.scaler_features.length;
-  const catCols  = catFeats.length;
-  const tfidfOffset = numCols + catCols;
-
-  let contribNum = MODEL.intercept;
-  for (let i = 0; i < numCols; i++) contribNum += coefs[i] * x[i];
-
-  let contribCat = 0;
-  for (let i = numCols; i < tfidfOffset; i++) contribCat += coefs[i] * x[i];
-
-  let contribNLP = 0;
-  for (let i = tfidfOffset; i < x.length; i++) contribNLP += coefs[i] * x[i];
-
-  // Affichage
-  document.getElementById('out-price').textContent = price.toFixed(2) + ' €';
-  document.getElementById('out-num').textContent   = (contribNum >= 0 ? '+' : '') + contribNum.toFixed(2) + ' €';
-  document.getElementById('out-nlp').textContent   = (contribNLP >= 0 ? '+' : '') + contribNLP.toFixed(2) + ' €';
-  document.getElementById('out-cat').textContent   = (contribCat >= 0 ? '+' : '') + contribCat.toFixed(2) + ' €';
-
-  // Top mots influents
-  const vocab = TFIDF.vocabulary;
-  const words = Object.entries(vocab)
-    .map(([word, idx]) => ({
-      word,
-      impact: Math.abs(coefs[tfidfOffset + idx] * tfidfVec[idx])
-    }))
-    .filter(d => d.impact > 0)
-    .sort((a, b) => b.impact - a.impact)
-    .slice(0, 6);
-
+  const words = data.top_words || [];
   const maxImpact = words[0]?.impact || 1;
-  const barsDiv = document.getElementById('feat-bars');
-  barsDiv.innerHTML = words.map(d => `
+  document.getElementById('feat-bars').innerHTML = words.map(d => `
     <div class="feat-bar">
       <div class="feat-bar-label">
         <span>${d.word}</span>
-        <span class="feat-val">${(d.impact).toFixed(4)}</span>
+        <span class="feat-val">${d.impact.toFixed(4)}</span>
       </div>
       <div class="bar-track">
         <div class="bar-fill" style="width:${(d.impact/maxImpact*100).toFixed(1)}%"></div>
@@ -562,7 +469,8 @@ function predict() {
     </div>
   `).join('');
 
-  document.getElementById('result').style.display = 'block';
+  document.getElementById('result-clf').style.display = 'block';
+  document.getElementById('result-reg').style.display = 'block';
 }
 
 function showErr(msg) {
@@ -570,6 +478,8 @@ function showErr(msg) {
   el.textContent = msg;
   el.style.display = 'block';
 }
+
+init();
 </script>
 </body>
 </html>

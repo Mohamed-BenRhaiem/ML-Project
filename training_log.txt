@@ -1,0 +1,71 @@
+Dataset brut : (10500, 9)
+Après drop NaN sur cibles (Prix_Revente, Categorie) : 9472
+Après suppression outliers Prix_Revente : 7814
+
+Split  Train: 5469 | Val: 1172 | Test: 1173
+Ratios  Train: 70% | Val: 15% | Test: 15%
+
+════════════════════════════════════════════════════════════
+RÉGRESSION (cible : Prix_Revente)
+════════════════════════════════════════════════════════════
+
+─── GridSearch (RMSE, 3-fold CV) ───
+
+[Ridge] 4 combos × 3 folds = 12 fits
+  best params : {'alpha': 0.1}
+  CV RMSE : 0.8045
+  temps       : 6.4s
+
+[SVR] 1 combos × 3 folds = 3 fits
+  best params : {'C': 10.0, 'epsilon': 0.2, 'gamma': 'scale'}
+  CV RMSE : 0.6643
+  temps       : 6.8s
+
+[RandomForest] 4 combos × 3 folds = 12 fits
+  best params : {'max_depth': 20, 'min_samples_leaf': 2, 'n_estimators': 200}
+  CV RMSE : 0.2953
+  temps       : 152.5s
+
+[HistGradientBoosting] 4 combos × 3 folds = 12 fits
+  best params : {'l2_regularization': 1.0, 'learning_rate': 0.1, 'max_depth': 8, 'max_iter': 300, 'min_samples_leaf': 20}
+  CV RMSE : 0.2679
+  temps       : 35.7s
+
+✓ Meilleur régresseur : HistGradientBoosting
+  Val   R²=0.9956 | RMSE=0.1972
+  Test  R²=0.9931 | RMSE=0.2551
+
+════════════════════════════════════════════════════════════
+CLASSIFICATION (cible : Categorie)
+════════════════════════════════════════════════════════════
+
+─── GridSearch (F1-macro, 3-fold CV) ───
+
+[LogisticRegression] 3 combos × 3 folds = 9 fits
+  best params : {'C': 10.0, 'solver': 'lbfgs'}
+  CV F1-macro : 0.9990
+  temps       : 0.7s
+
+[RandomForest] 4 combos × 3 folds = 12 fits
+  best params : {'max_depth': None, 'min_samples_leaf': 2, 'n_estimators': 200}
+  CV F1-macro : 1.0000
+  temps       : 4.1s
+
+✓ Meilleur classifieur : RandomForest
+  Val   Acc=1.0000 | F1-macro=1.0000
+  Test  Acc=1.0000 | F1-macro=1.0000
+
+Matrice de confusion (test) — classes ['Métal', 'Papier', 'Plastique', 'Verre']:
+[[ 86   0   0   0]
+ [  0 329   0   0]
+ [  0   0 393   0]
+ [  0   0   0 365]]
+
+✓ Artefacts sauvegardés dans artifacts/
+  scaler.joblib, encoder.joblib, tfidf.joblib,
+  model.joblib (régression), clf_model.joblib (classification), meta.joblib
+
+Source possibles : ['Centre_Tri', 'Collecte_Citoyenne', 'Usine_A', 'Usine_B']
+Categorie possibles : ['Métal', 'Papier', 'Plastique', 'Verre']
+
+Lance maintenant : uvicorn main:app --reload
