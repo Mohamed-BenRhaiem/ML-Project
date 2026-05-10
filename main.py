@@ -233,9 +233,49 @@ def classify_only(req: PredictRequest):
     }
 
 
+@app.get("/stats")
+def stats():
+    """Dashboard data — distribution des classes/sources + stats du dataset."""
+    csv_path = Path("dataset_ProjetML_2026.csv")
+    if not csv_path.exists():
+        raise HTTPException(404, "dataset_ProjetML_2026.csv introuvable")
+    df = pd.read_csv(csv_path)
+
+    def _vc(col):
+        s = df[col].dropna().value_counts()
+        return [{"label": str(k), "count": int(v)} for k, v in s.items()]
+
+    # Stats numériques
+    num_cols = ['Poids', 'Volume', 'Conductivite', 'Opacite', 'Rigidite', 'Prix_Revente']
+    num_stats = {}
+    for c in num_cols:
+        s = df[c].dropna()
+        num_stats[c] = {
+            "count": int(s.shape[0]),
+            "mean": float(s.mean()),
+            "std": float(s.std()),
+            "min": float(s.min()),
+            "median": float(s.median()),
+            "max": float(s.max()),
+            "nan_pct": float(df[c].isna().mean() * 100),
+        }
+
+    return {
+        "n_rows": int(len(df)),
+        "n_cols": int(df.shape[1]),
+        "categorie_distribution": _vc("Categorie"),
+        "source_distribution": _vc("Source"),
+        "numeric_stats": num_stats,
+        "clustering_image": "/artifacts/clustering_pca.png",
+    }
+
+
 @app.get("/")
 def root():
     return FileResponse("index.html")
 
 
+# Sert les images de clustering générées par clustering.py
+if Path("artifacts").exists():
+    app.mount("/artifacts", StaticFiles(directory="artifacts"), name="artifacts")
 app.mount("/static", StaticFiles(directory="."), name="static")

@@ -1,5 +1,24 @@
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\mlflow\tracking\_tracking_service\utils.py:184: FutureWarning: The filesystem tracking backend (e.g., './mlruns') is deprecated as of February 2026. Consider transitioning to a database backend (e.g., 'sqlite:///mlflow.db') to take advantage of the latest MLflow features. See https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store for migration guidance.
+  return FileStore(store_uri, store_uri)
+2026/05/09 11:27:38 INFO mlflow.tracking.fluent: Experiment with name 'eco-smart-classifier' does not exist. Creating a new experiment.
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\impute\_iterative.py:867: ConvergenceWarning: [IterativeImputer] Early stopping criterion not reached.
+  warnings.warn(
+2026/05/09 11:29:52 WARNING mlflow.sklearn: Saving scikit-learn models in the pickle or cloudpickle format requires exercising caution because these formats rely on Python's object serialization mechanism, which can execute arbitrary code during deserialization. The recommended safe alternative is the 'skops' format. For more information, see: https://scikit-learn.org/stable/model_persistence.html
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\mlflow\tracking\_model_registry\utils.py:220: FutureWarning: The filesystem model registry backend (e.g., './mlruns') is deprecated as of February 2026. Consider transitioning to a database backend (e.g., 'sqlite:///mlflow.db') to take advantage of the latest MLflow features. See https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store for migration guidance.
+  return FileStore(store_uri)
+Successfully registered model 'eco_smart_regressor'.
+Created version '1' of model 'eco_smart_regressor'.
+2026/05/09 11:30:06 WARNING mlflow.sklearn: Saving scikit-learn models in the pickle or cloudpickle format requires exercising caution because these formats rely on Python's object serialization mechanism, which can execute arbitrary code during deserialization. The recommended safe alternative is the 'skops' format. For more information, see: https://scikit-learn.org/stable/model_persistence.html
+Successfully registered model 'eco_smart_classifier'.
+Created version '1' of model 'eco_smart_classifier'.
 Dataset brut : (10500, 9)
 Après drop NaN sur cibles (Prix_Revente, Categorie) : 9472
+
+─── Comparaison stratégies d'imputation ───
+  Median             RMSE Ridge-CV3 = 722.0448  (2.5s)
+  KNN(K=4)           RMSE Ridge-CV3 = 722.1627  (4.6s)
+  IterativeImputer   RMSE Ridge-CV3 = 722.2016  (2.7s)
+  → meilleur imputeur d'après ce benchmark : Median
 Après suppression outliers Prix_Revente : 7814
 
 Split  Train: 5469 | Val: 1172 | Test: 1173
@@ -13,27 +32,27 @@ RÉGRESSION (cible : Prix_Revente)
 
 [Ridge] 4 combos × 3 folds = 12 fits
   best params : {'alpha': 0.1}
-  CV RMSE : 0.8045
-  temps       : 6.4s
+  CV RMSE : 0.7740
+  temps       : 0.9s
 
 [SVR] 1 combos × 3 folds = 3 fits
   best params : {'C': 10.0, 'epsilon': 0.2, 'gamma': 'scale'}
-  CV RMSE : 0.6643
-  temps       : 6.8s
+  CV RMSE : 0.6715
+  temps       : 6.2s
 
 [RandomForest] 4 combos × 3 folds = 12 fits
-  best params : {'max_depth': 20, 'min_samples_leaf': 2, 'n_estimators': 200}
-  CV RMSE : 0.2953
-  temps       : 152.5s
+  best params : {'max_depth': None, 'min_samples_leaf': 2, 'n_estimators': 200}
+  CV RMSE : 0.2890
+  temps       : 77.9s
 
 [HistGradientBoosting] 4 combos × 3 folds = 12 fits
   best params : {'l2_regularization': 1.0, 'learning_rate': 0.1, 'max_depth': 8, 'max_iter': 300, 'min_samples_leaf': 20}
-  CV RMSE : 0.2679
-  temps       : 35.7s
+  CV RMSE : 0.2722
+  temps       : 33.7s
 
 ✓ Meilleur régresseur : HistGradientBoosting
-  Val   R²=0.9956 | RMSE=0.1972
-  Test  R²=0.9931 | RMSE=0.2551
+  Val   R²=0.9962 | RMSE=0.1841
+  Test  R²=0.9926 | RMSE=0.2643
 
 ════════════════════════════════════════════════════════════
 CLASSIFICATION (cible : Categorie)
@@ -43,8 +62,8 @@ CLASSIFICATION (cible : Categorie)
 
 [LogisticRegression] 3 combos × 3 folds = 9 fits
   best params : {'C': 10.0, 'solver': 'lbfgs'}
-  CV F1-macro : 0.9990
-  temps       : 0.7s
+  CV F1-macro : 0.9992
+  temps       : 0.9s
 
 [RandomForest] 4 combos × 3 folds = 12 fits
   best params : {'max_depth': None, 'min_samples_leaf': 2, 'n_estimators': 200}

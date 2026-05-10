@@ -234,8 +234,85 @@
     transition: width 0.5s ease;
   }
 
+  /* Onglets */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Dashboard */
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .stat-card h3 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .stat-item {
+    background: #f7f7f4;
+    border-radius: 4px;
+    padding: 8px 12px;
+  }
+  .stat-item .stat-key {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .stat-item .stat-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .cluster-img {
+    max-width: 100%;
+    border-radius: 4px;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+  }
+
   @media (max-width: 500px) {
     .form-grid { grid-template-columns: 1fr; }
+    .tabs { flex-wrap: wrap; }
+    .tab-btn { font-size: 11px; padding: 8px 10px; }
   }
 </style>
 </head>
@@ -251,42 +328,99 @@
     </div>
   </div>
 
-  <!-- Formulaire (Categorie est PRÉDITE, plus saisie) -->
-  <div class="form-grid">
-    <div class="field">
-      <label>Source</label>
-      <select id="source"></select>
+  <!-- Navigation onglets -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">📊 Dashboard</button>
+    <button class="tab-btn" data-tab="manual">🎛️ Prédiction Manuelle</button>
+    <button class="tab-btn" data-tab="nlp">💬 Assistant NLP</button>
+  </div>
+
+  <!-- ─── Onglet 1 : Dashboard Data ─────────────────────────────── -->
+  <div class="tab-panel active" id="panel-dashboard">
+    <div class="stat-card">
+      <h3>Vue d'ensemble du dataset</h3>
+      <div class="stat-grid" id="dashboard-overview">
+        <div class="stat-item"><div class="stat-key">Chargement…</div></div>
+      </div>
     </div>
-    <div class="field">
-      <label>Poids (kg)</label>
-      <input type="number" id="poids" placeholder="2.5" min="0" step="0.1"/>
+
+    <div class="stat-card">
+      <h3>Distribution des catégories</h3>
+      <div id="dashboard-categorie"></div>
     </div>
-    <div class="field">
-      <label>Volume (L)</label>
-      <input type="number" id="volume" placeholder="5.0" min="0" step="0.1"/>
+
+    <div class="stat-card">
+      <h3>Distribution des sources</h3>
+      <div id="dashboard-source"></div>
     </div>
-    <div class="field">
-      <label>Conductivité</label>
-      <input type="number" id="conductivite" placeholder="0.85" step="0.01"/>
-    </div>
-    <div class="field">
-      <label>Opacité</label>
-      <input type="number" id="opacite" placeholder="0.6" min="0" max="1" step="0.01"/>
-    </div>
-    <div class="field">
-      <label>Rigidité</label>
-      <input type="number" id="rigidite" placeholder="3.2" step="0.1"/>
+
+    <div class="stat-card">
+      <h3>Clusters découverts (KMeans + PCA 2D)</h3>
+      <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+        Module 3 : analyse non-supervisée. À gauche les clusters trouvés, à droite les vraies catégories.
+      </p>
+      <img id="cluster-img" class="cluster-img" alt="Clusters PCA"/>
     </div>
   </div>
 
-  <div class="rapport-field">
-    <label>Rapport de collecte (texte NLP)</label>
-    <textarea id="rapport" placeholder="Ex: Objet plastique rigide, légèrement endommagé, provenant d'un ménage. Composé de polyéthylène haute densité..."></textarea>
+  <!-- ─── Onglet 2 : Prédiction manuelle ─────────────────────────── -->
+  <div class="tab-panel" id="panel-manual">
+    <p style="font-size: 13px; color: var(--muted); margin-bottom: 1rem;">
+      Saisis les caractéristiques physiques. Le modèle prédit la catégorie + le prix.
+    </p>
+    <div class="form-grid">
+      <div class="field">
+        <label>Source</label>
+        <select id="source"></select>
+      </div>
+      <div class="field">
+        <label>Poids (kg)</label>
+        <input type="number" id="poids" placeholder="2.5" min="0" step="0.1"/>
+      </div>
+      <div class="field">
+        <label>Volume (L)</label>
+        <input type="number" id="volume" placeholder="5.0" min="0" step="0.1"/>
+      </div>
+      <div class="field">
+        <label>Conductivité (0–1)</label>
+        <input type="number" id="conductivite" placeholder="0.05" step="0.01"/>
+      </div>
+      <div class="field">
+        <label>Opacité (0–1)</label>
+        <input type="number" id="opacite" placeholder="0.3" min="0" max="1" step="0.01"/>
+      </div>
+      <div class="field">
+        <label>Rigidité (1–10)</label>
+        <input type="number" id="rigidite" placeholder="5.0" step="0.1"/>
+      </div>
+    </div>
+
+    <div class="rapport-field">
+      <label>Rapport de collecte (optionnel)</label>
+      <textarea id="rapport" placeholder="Ex: Lot de plastique récupéré, état correct, polyéthylène haute densité"></textarea>
+    </div>
+
+    <button class="predict-btn" id="btn-predict" onclick="predictManual()" disabled>
+      CONNEXION À L'API…
+    </button>
   </div>
 
-  <button class="predict-btn" id="btn-predict" onclick="predict()" disabled>
-    CONNEXION À L'API…
-  </button>
+  <!-- ─── Onglet 3 : Assistant NLP ───────────────────────────────── -->
+  <div class="tab-panel" id="panel-nlp">
+    <p style="font-size: 13px; color: var(--muted); margin-bottom: 1rem;">
+      Décris le déchet en français. L'assistant déduira la catégorie + estimera le prix.
+      Les valeurs physiques sont fixées sur les médianes du dataset.
+    </p>
+    <div class="rapport-field">
+      <label>Description du déchet</label>
+      <textarea id="rapport-nlp" rows="5"
+        placeholder="Ex: Bouteille en plastique rigide récupérée dans un site de tri, polyéthylène haute densité, légèrement endommagée."></textarea>
+    </div>
+    <button class="predict-btn" id="btn-predict-nlp" onclick="predictNLP()" disabled>
+      CONNEXION À L'API…
+    </button>
+  </div>
+
   <div class="error" id="err"></div>
 
   <!-- Résultat classification -->
@@ -346,6 +480,20 @@ const LABELS = {
 };
 
 let META = null;
+let STATS = null;
+
+// ── Onglets ──────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === `panel-${name}`));
+  if (name === 'dashboard' && !STATS) loadDashboard();
+}
 
 // ── Init : récupère metadata et peuple les <select> ──────────────
 async function init() {
@@ -360,9 +508,12 @@ async function init() {
     document.getElementById('status-api').textContent =
       'API connectée · classif=' + META.clf_model + ' · régression=' + META.reg_model;
 
-    const btn = document.getElementById('btn-predict');
-    btn.disabled = false;
-    btn.textContent = 'CLASSIFIER + ESTIMER LE PRIX';
+    document.getElementById('btn-predict').disabled = false;
+    document.getElementById('btn-predict').textContent = 'CLASSIFIER + ESTIMER LE PRIX';
+    document.getElementById('btn-predict-nlp').disabled = false;
+    document.getElementById('btn-predict-nlp').textContent = 'ANALYSER LE TEXTE';
+
+    loadDashboard();
   } catch (e) {
     document.getElementById('dot-api').className = 'dot';
     document.getElementById('status-api').textContent =
@@ -381,16 +532,63 @@ function fillSelect(id, values, col) {
     .join('');
 }
 
-// ── Prédiction via API ───────────────────────────────────────────
-async function predict() {
-  document.getElementById('err').style.display = 'none';
+// ── Onglet Dashboard ─────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const r = await fetch(API_BASE + '/stats');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    STATS = await r.json();
+    renderDashboard(STATS);
+  } catch (e) {
+    document.getElementById('dashboard-overview').innerHTML =
+      `<div class="stat-item"><div class="stat-key">Erreur</div><div class="stat-val">${e.message}</div></div>`;
+  }
+}
 
+function renderDashboard(s) {
+  // Vue d'ensemble
+  const ov = document.getElementById('dashboard-overview');
+  ov.innerHTML = `
+    <div class="stat-item"><div class="stat-key">Lignes</div><div class="stat-val">${s.n_rows.toLocaleString()}</div></div>
+    <div class="stat-item"><div class="stat-key">Colonnes</div><div class="stat-val">${s.n_cols}</div></div>
+    <div class="stat-item"><div class="stat-key">Modèle régression</div><div class="stat-val" style="font-size:13px">${META.reg_model}</div></div>
+    <div class="stat-item"><div class="stat-key">Modèle classif</div><div class="stat-val" style="font-size:13px">${META.clf_model}</div></div>
+    <div class="stat-item"><div class="stat-key">Mots TF-IDF</div><div class="stat-val">${META.n_tfidf_words}</div></div>
+    <div class="stat-item"><div class="stat-key">KNN K</div><div class="stat-val">${META.knn_neighbors}</div></div>
+  `;
+
+  document.getElementById('dashboard-categorie').innerHTML = renderBars(s.categorie_distribution);
+  document.getElementById('dashboard-source').innerHTML = renderBars(s.source_distribution);
+
+  const img = document.getElementById('cluster-img');
+  img.src = API_BASE + s.clustering_image + '?t=' + Date.now();
+  img.onerror = () => { img.style.display = 'none'; };
+}
+
+function renderBars(items) {
+  const max = Math.max(...items.map(d => d.count));
+  return items.map(d => `
+    <div class="feat-bar">
+      <div class="feat-bar-label">
+        <span>${d.label}</span>
+        <span class="feat-val">${d.count.toLocaleString()}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(d.count/max*100).toFixed(1)}%"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Onglet Prédiction Manuelle ──────────────────────────────────
+async function predictManual() {
+  document.getElementById('err').style.display = 'none';
   const rapport = document.getElementById('rapport').value.trim();
   const poids   = parseFloat(document.getElementById('poids').value);
   const volume  = parseFloat(document.getElementById('volume').value);
 
-  if (!rapport || isNaN(poids) || isNaN(volume)) {
-    showErr('Remplis au moins Poids, Volume et le Rapport de collecte.');
+  if (isNaN(poids) || isNaN(volume)) {
+    showErr('Remplis au moins Poids et Volume.');
     return;
   }
 
@@ -403,8 +601,34 @@ async function predict() {
     Rigidite:         parseFloat(document.getElementById('rigidite').value) || 0,
     Rapport_Collecte: rapport
   };
+  await callPredict(payload, 'btn-predict');
+}
 
-  const btn = document.getElementById('btn-predict');
+// ── Onglet Assistant NLP ─────────────────────────────────────────
+async function predictNLP() {
+  document.getElementById('err').style.display = 'none';
+  const rapport = document.getElementById('rapport-nlp').value.trim();
+  if (!rapport) {
+    showErr('Tape une description du déchet.');
+    return;
+  }
+  if (!STATS) await loadDashboard();
+  // Médianes du dataset comme valeurs neutres pour les features numériques
+  const med = (STATS && STATS.numeric_stats) || {};
+  const payload = {
+    Source: (META.categories.Source && META.categories.Source[0]) || 'Centre_Tri',
+    Poids: med.Poids ? med.Poids.median : 30,
+    Volume: med.Volume ? med.Volume.median : 80,
+    Conductivite: med.Conductivite ? med.Conductivite.median : 0,
+    Opacite: med.Opacite ? med.Opacite.median : 0.5,
+    Rigidite: med.Rigidite ? med.Rigidite.median : 5,
+    Rapport_Collecte: rapport
+  };
+  await callPredict(payload, 'btn-predict-nlp');
+}
+
+async function callPredict(payload, btnId) {
+  const btn = document.getElementById(btnId);
   const oldText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'PRÉDICTION EN COURS…';
@@ -421,6 +645,7 @@ async function predict() {
     }
     const data = await r.json();
     renderResult(data);
+    document.getElementById('result-clf').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     showErr('Prédiction échouée : ' + e.message);
   } finally {

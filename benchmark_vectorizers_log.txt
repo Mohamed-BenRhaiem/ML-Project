@@ -1,0 +1,68 @@
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\mlflow\tracking\_tracking_service\utils.py:184: FutureWarning: The filesystem tracking backend (e.g., './mlruns') is deprecated as of February 2026. Consider transitioning to a database backend (e.g., 'sqlite:///mlflow.db') to take advantage of the latest MLflow features. See https://mlflow.org/docs/latest/self-hosting/migrate-from-file-store for migration guidance.
+  return FileStore(store_uri, store_uri)
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\linear_model\_logistic.py:1184: FutureWarning: 'n_jobs' has no effect since 1.8 and will be removed in 1.10. You provided 'n_jobs=-1', please leave it unspecified.
+  warnings.warn(msg, category=FutureWarning)
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\linear_model\_logistic.py:1184: FutureWarning: 'n_jobs' has no effect since 1.8 and will be removed in 1.10. You provided 'n_jobs=-1', please leave it unspecified.
+  warnings.warn(msg, category=FutureWarning)
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\linear_model\_logistic.py:1184: FutureWarning: 'n_jobs' has no effect since 1.8 and will be removed in 1.10. You provided 'n_jobs=-1', please leave it unspecified.
+  warnings.warn(msg, category=FutureWarning)
+C:\Users\Dell\AppData\Local\Programs\Python\Python313\Lib\site-packages\sklearn\linear_model\_logistic.py:1184: FutureWarning: 'n_jobs' has no effect since 1.8 and will be removed in 1.10. You provided 'n_jobs=-1', please leave it unspecified.
+  warnings.warn(msg, category=FutureWarning)
+Échantillons : 9986
+
+─── 1) Bag of Words ───
+  BoW          | acc = 1.0000 | F1-macro = 1.0000 | dim = 115 | clf time = 0.3s
+
+─── 2) TF-IDF (uni+bi, stopwords FR, stemmer Snowball) ───
+  TF-IDF       | acc = 1.0000 | F1-macro = 1.0000 | dim = 300 | clf time = 0.1s
+
+─── 3) Word2Vec (avg embedding, dim=100) ───
+  Word2Vec entraîné en 1.1s | vocab = 115
+  Word2Vec     | acc = 1.0000 | F1-macro = 1.0000 | dim = 100 | clf time = 0.1s
+
+─── 4) FastText (avg embedding, robuste OOV) ───
+  FastText entraîné en 4.4s | vocab = 115
+  FastText     | acc = 1.0000 | F1-macro = 1.0000 | dim = 100 | clf time = 0.1s
+
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+═
+RÉSUMÉ — classification Categorie depuis texte seul
+══════════════════════════════
+Vectoriseur  |     Acc |  F1-macro |   Dim |   Time
+-------------------------------------------------------
+BoW          |  1.0000 |    1.0000 |   115 |   0.3s
+TF-IDF       |  1.0000 |    1.0000 |   300 |   0.1s
+Word2Vec     |  1.0000 |    1.0000 |   100 |   0.1s
+FastText     |  1.0000 |    1.0000 |   100 |   0.1s
+
+→ Meilleur vectoriseur : BoW (F1 = 1.0000)
+
+✓ Sauvegardé : artifacts\vectorizer_benchmark.txt

@@ -1,0 +1,25 @@
+[run]
+source = .
+omit =
+    # Scripts batch exécutés par DVC, pas testés en unitaire
+    nettoyage.py
+    clustering.py
+    benchmark_vectorizers.py
+    shap_analysis.py
+    # Tests eux-mêmes
+    tests/*
+    # Configuration
+    setup.py
+    conftest.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    pass
+show_missing = True
+precision = 1
+
+[html]
+directory = htmlcov

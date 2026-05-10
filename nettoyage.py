@@ -4,7 +4,8 @@ nettoyage.py
 Pipeline conforme au cahier des charges :
   - Cibles : Categorie (classification), Prix_Revente (régression)
   - Features : Poids, Volume, Conductivite, Opacite, Rigidite, Source, Rapport_Collecte
-  - Imputation KNN (K=4)
+  - Comparaison imputation (médiane / KNN / IterativeImputer) — choix K=4
+  - NLP : stopwords FR + stemmer Snowball + TF-IDF uni+bigrams
   - Split 70:15:15 stratifié sur Categorie
   - GridSearchCV sur 2 problèmes : régression + classification
 
@@ -12,6 +13,7 @@ Sauvegarde dans artifacts/ : scaler, encoder, tfidf, model (régression),
 clf_model (classification), meta.
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -19,7 +21,13 @@ import numpy as np
 import pandas as pd
 import joblib
 
-from sklearn.impute import KNNImputer
+import mlflow
+import mlflow.sklearn
+
+# Activer IterativeImputer (toujours expérimental dans sklearn)
+from sklearn.compose import ColumnTransformer
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import KNNImputer, SimpleImputer, IterativeImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge, LogisticRegression
@@ -29,11 +37,21 @@ from sklearn.ensemble import (
     RandomForestRegressor,
     RandomForestClassifier,
 )
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.metrics import (
     r2_score, mean_squared_error,
     accuracy_score, f1_score, confusion_matrix,
 )
+
+# NLP : stopwords + stemmer Snowball partagés via nlp_utils.py
+from nlp_utils import french_tokenizer
+
+# ─── MLFLOW : tracking local + experiment ─────────────────────────
+# Sauvegarde les runs dans ./mlruns/ (file backend)
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment("eco-smart-classifier")
+USE_MLFLOW = os.environ.get("DISABLE_MLFLOW", "0") != "1"
 
 # ─── 1. CHARGEMENT ───────────────────────────────────────────────
 df = pd.read_csv("dataset_ProjetML_2026.csv")
@@ -49,7 +67,45 @@ target_clf = 'Categorie'
 df = df.dropna(subset=[target_reg, target_clf]).reset_index(drop=True)
 print(f"Après drop NaN sur cibles ({target_reg}, {target_clf}) : {len(df)}")
 
-# ─── 2bis. IMPUTATION KNN (K=4) sur features numériques ──────────
+
+def compare_imputers(df_raw, num_cols, target):
+    print("\n─── Comparaison stratégies d'imputation ───")
+    candidates = {
+        'Median':           SimpleImputer(strategy='median'),
+        'KNN(K=4)':         KNNImputer(n_neighbors=4),
+        'IterativeImputer': IterativeImputer(max_iter=10, random_state=42),
+    }
+    results = {}
+    y = df_raw[target].values
+    for name, imp in candidates.items():
+        t0 = time.time()
+        X = imp.fit_transform(df_raw[num_cols])
+        scaler_tmp = StandardScaler()
+        X_scaled = scaler_tmp.fit_transform(X)
+        scores = cross_val_score(
+            Ridge(alpha=1.0), X_scaled, y,
+            scoring='neg_root_mean_squared_error', cv=3, n_jobs=-1,
+        )
+        rmse = -scores.mean()
+        elapsed = time.time() - t0
+        results[name] = rmse
+        print(f"  {name:18s} RMSE Ridge-CV3 = {rmse:.4f}  ({elapsed:.1f}s)")
+
+        if USE_MLFLOW:
+            with mlflow.start_run(run_name=f"imputer_{name.replace('(', '_').replace(')', '')}"):
+                mlflow.set_tag("task", "imputation_benchmark")
+                mlflow.set_tag("imputer", name)
+                mlflow.log_metric("ridge_cv_rmse_pre_outliers", rmse)
+                mlflow.log_metric("imputation_time_seconds", elapsed)
+    best = min(results, key=results.get)
+    print(f"  → meilleur imputeur d'après ce benchmark : {best}")
+    return results
+
+imputation_benchmark = compare_imputers(df.copy(), feature_num_base, target_reg)
+
+
+# ─── 2ter. IMPUTATION KNN (K=4) — choix retenu ───────────────────
+
 knn_imputer = KNNImputer(n_neighbors=4)
 df[feature_num_base] = knn_imputer.fit_transform(df[feature_num_base])
 
@@ -87,46 +143,53 @@ df_train, df_val = train_test_split(
 print(f"\nSplit  Train: {len(df_train)} | Val: {len(df_val)} | Test: {len(df_test)}")
 print(f"Ratios  Train: {len(df_train)/len(df):.0%} | Val: {len(df_val)/len(df):.0%} | Test: {len(df_test)/len(df):.0%}")
 
-# ─── 5. TF-IDF — fit train uniquement ────────────────────────────
-tfidf = TfidfVectorizer(
-    max_features=300, ngram_range=(1, 2), min_df=2, sublinear_tf=True,
+# ─── 5-8. PIPELINE MULTIMODAL via ColumnTransformer ──────────────
+# Module 5 du cahier des charges : fusion numérique + catégoriel + texte
+# orchestrée par ColumnTransformer pour la reproductibilité.
+#
+# Note : TfidfVectorizer attend une 1D (Series), pas un DataFrame —
+# on passe donc le NOM de colonne text_col (string) au lieu d'une liste.
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', StandardScaler(), feature_num),
+        ('cat', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), cat_cols),
+        ('text', TfidfVectorizer(
+            tokenizer=french_tokenizer,
+            token_pattern=None,
+            max_features=300,
+            ngram_range=(1, 2),
+            min_df=2,
+            sublinear_tf=True,
+            lowercase=False,
+        ), text_col),
+    ],
+    remainder='drop',
+    verbose_feature_names_out=False,
 )
-text_train = tfidf.fit_transform(df_train[text_col]).toarray()
-text_val   = tfidf.transform(df_val[text_col]).toarray()
-text_test  = tfidf.transform(df_test[text_col]).toarray()
 
-text_feat_names = list(tfidf.get_feature_names_out())
-text_train_df = pd.DataFrame(text_train, columns=text_feat_names)
-text_val_df   = pd.DataFrame(text_val,   columns=text_feat_names)
-text_test_df  = pd.DataFrame(text_test,  columns=text_feat_names)
+# Fit sur le train uniquement
+preprocessor.fit(df_train)
 
-# ─── 6. ENCODAGE One-Hot sur Source uniquement ───────────────────
-encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-cat_train = encoder.fit_transform(df_train[cat_cols])
-cat_val   = encoder.transform(df_val[cat_cols])
-cat_test  = encoder.transform(df_test[cat_cols])
+# Extraction des transformateurs fittés (pour compat main.py + tests)
+scaler  = preprocessor.named_transformers_['num']
+encoder = preprocessor.named_transformers_['cat']
+tfidf   = preprocessor.named_transformers_['text']
 
-cat_feat_names = list(encoder.get_feature_names_out(cat_cols))
-cat_train_df = pd.DataFrame(cat_train, columns=cat_feat_names)
-cat_val_df   = pd.DataFrame(cat_val,   columns=cat_feat_names)
-cat_test_df  = pd.DataFrame(cat_test,  columns=cat_feat_names)
+# Construction des matrices X via le ColumnTransformer
+# Densification car TfidfVectorizer renvoie une matrice sparse
+def _ct_transform(ct, df):
+    out = ct.transform(df)
+    if hasattr(out, 'toarray'):
+        out = out.toarray()
+    return out
 
-# ─── 7. STANDARDISATION numérique ────────────────────────────────
-scaler = StandardScaler()
-num_train = pd.DataFrame(scaler.fit_transform(df_train[feature_num]), columns=feature_num)
-num_val   = pd.DataFrame(scaler.transform(df_val[feature_num]),       columns=feature_num)
-num_test  = pd.DataFrame(scaler.transform(df_test[feature_num]),      columns=feature_num)
-
-# ─── 8. ASSEMBLAGE ───────────────────────────────────────────────
-def assemble(num, cat, txt):
-    return pd.concat(
-        [num.reset_index(drop=True), cat.reset_index(drop=True), txt.reset_index(drop=True)],
-        axis=1,
-    )
-
-X_train = assemble(num_train, cat_train_df, text_train_df)
-X_val   = assemble(num_val,   cat_val_df,   text_val_df)
-X_test  = assemble(num_test,  cat_test_df,  text_test_df)
+feat_names = list(preprocessor.get_feature_names_out())
+X_train = pd.DataFrame(_ct_transform(preprocessor, df_train), columns=feat_names)
+X_val   = pd.DataFrame(_ct_transform(preprocessor, df_val),   columns=feat_names)
+X_test  = pd.DataFrame(_ct_transform(preprocessor, df_test),  columns=feat_names)
+print(f"\nVecteur final assemblé : {X_train.shape[1]} features ({len(feature_num)} num + "
+      f"{len(encoder.get_feature_names_out(cat_cols))} cat + "
+      f"{len(tfidf.get_feature_names_out())} TF-IDF)")
 
 y_train_reg = df_train[target_reg].values
 y_val_reg   = df_val[target_reg].values
@@ -137,8 +200,8 @@ y_val_clf   = df_val[target_clf].values
 y_test_clf  = df_test[target_clf].values
 
 
-# ─── 9. HELPER GRIDSEARCH ────────────────────────────────────────
-def run_gridsearch(candidates, X, y, scoring, metric_name, lower_is_better):
+# ─── 9. HELPER GRIDSEARCH (avec logging MLflow par candidat) ─────
+def run_gridsearch(candidates, X, y, scoring, metric_name, lower_is_better, task_tag):
     print(f"\n─── GridSearch ({metric_name}, 3-fold CV) ───")
     results = {}
     for name, cfg in candidates.items():
@@ -160,6 +223,18 @@ def run_gridsearch(candidates, X, y, scoring, metric_name, lower_is_better):
         print(f"  best params : {gs.best_params_}")
         print(f"  CV {metric_name} : {score:.4f}")
         print(f"  temps       : {elapsed:.1f}s")
+
+        # ─── MLflow : un run par candidat ────────────────────────
+        if USE_MLFLOW:
+            with mlflow.start_run(run_name=f"{task_tag}_{name}"):
+                mlflow.set_tag("task", task_tag)
+                mlflow.set_tag("model_family", name)
+                mlflow.log_params({f"hp_{k}": v for k, v in gs.best_params_.items()})
+                mlflow.log_param("n_combos_tested", n_combos)
+                mlflow.log_param("cv_folds", 3)
+                mlflow.log_param("scoring", scoring)
+                mlflow.log_metric(f"cv_{metric_name.lower().replace('-', '_')}", score)
+                mlflow.log_metric("cv_time_seconds", elapsed)
     return results
 
 
@@ -202,15 +277,37 @@ reg_results = run_gridsearch(
     scoring='neg_root_mean_squared_error',
     metric_name='RMSE',
     lower_is_better=True,
+    task_tag='regression',
 )
 best_reg_name = min(reg_results, key=lambda n: reg_results[n]['score'])
 reg_model = reg_results[best_reg_name]['estimator']
 
 print(f"\n✓ Meilleur régresseur : {best_reg_name}")
-preds_val  = reg_model.predict(X_val)
-preds_test = reg_model.predict(X_test)
-print(f"  Val   R²={r2_score(y_val_reg, preds_val):.4f} | RMSE={np.sqrt(mean_squared_error(y_val_reg, preds_val)):.4f}")
-print(f"  Test  R²={r2_score(y_test_reg, preds_test):.4f} | RMSE={np.sqrt(mean_squared_error(y_test_reg, preds_test)):.4f}")
+val_preds_reg  = reg_model.predict(X_val)
+test_preds_reg = reg_model.predict(X_test)
+val_r2_reg   = r2_score(y_val_reg, val_preds_reg)
+val_rmse_reg = np.sqrt(mean_squared_error(y_val_reg, val_preds_reg))
+test_r2_reg   = r2_score(y_test_reg, test_preds_reg)
+test_rmse_reg = np.sqrt(mean_squared_error(y_test_reg, test_preds_reg))
+print(f"  Val   R²={val_r2_reg:.4f} | RMSE={val_rmse_reg:.4f}")
+print(f"  Test  R²={test_r2_reg:.4f} | RMSE={test_rmse_reg:.4f}")
+
+# ─── MLflow : run final régression + Model Registry ──────────────
+if USE_MLFLOW:
+    with mlflow.start_run(run_name=f"FINAL_regression_{best_reg_name}"):
+        mlflow.set_tag("task", "regression")
+        mlflow.set_tag("stage", "final")
+        mlflow.set_tag("winner", best_reg_name)
+        mlflow.log_metric("val_r2", val_r2_reg)
+        mlflow.log_metric("val_rmse", val_rmse_reg)
+        mlflow.log_metric("test_r2", test_r2_reg)
+        mlflow.log_metric("test_rmse", test_rmse_reg)
+        mlflow.log_param("test_size", len(X_test))
+        # Enregistre le modèle dans le Model Registry
+        mlflow.sklearn.log_model(
+            reg_model, name="model",
+            registered_model_name="eco_smart_regressor",
+        )
 
 
 # ─── 9b. CLASSIFICATION : Categorie ──────────────────────────────
@@ -241,23 +338,55 @@ clf_results = run_gridsearch(
     scoring='f1_macro',
     metric_name='F1-macro',
     lower_is_better=False,
+    task_tag='classification',
 )
 best_clf_name = max(clf_results, key=lambda n: clf_results[n]['score'])
 clf_model = clf_results[best_clf_name]['estimator']
 
 print(f"\n✓ Meilleur classifieur : {best_clf_name}")
-preds_val  = clf_model.predict(X_val)
-preds_test = clf_model.predict(X_test)
-print(f"  Val   Acc={accuracy_score(y_val_clf, preds_val):.4f} | F1-macro={f1_score(y_val_clf, preds_val, average='macro'):.4f}")
-print(f"  Test  Acc={accuracy_score(y_test_clf, preds_test):.4f} | F1-macro={f1_score(y_test_clf, preds_test, average='macro'):.4f}")
+val_preds_clf  = clf_model.predict(X_val)
+test_preds_clf = clf_model.predict(X_test)
+val_acc_clf  = accuracy_score(y_val_clf, val_preds_clf)
+val_f1_clf   = f1_score(y_val_clf, val_preds_clf, average='macro')
+test_acc_clf = accuracy_score(y_test_clf, test_preds_clf)
+test_f1_clf  = f1_score(y_test_clf, test_preds_clf, average='macro')
+test_cm = confusion_matrix(y_test_clf, test_preds_clf, labels=clf_model.classes_)
+print(f"  Val   Acc={val_acc_clf:.4f} | F1-macro={val_f1_clf:.4f}")
+print(f"  Test  Acc={test_acc_clf:.4f} | F1-macro={test_f1_clf:.4f}")
 print(f"\nMatrice de confusion (test) — classes {list(clf_model.classes_)}:")
-print(confusion_matrix(y_test_clf, preds_test, labels=clf_model.classes_))
+print(test_cm)
+
+# ─── MLflow : run final classification + Model Registry ──────────
+if USE_MLFLOW:
+    with mlflow.start_run(run_name=f"FINAL_classification_{best_clf_name}"):
+        mlflow.set_tag("task", "classification")
+        mlflow.set_tag("stage", "final")
+        mlflow.set_tag("winner", best_clf_name)
+        mlflow.log_metric("val_accuracy", val_acc_clf)
+        mlflow.log_metric("val_f1_macro", val_f1_clf)
+        mlflow.log_metric("test_accuracy", test_acc_clf)
+        mlflow.log_metric("test_f1_macro", test_f1_clf)
+        mlflow.log_param("test_size", len(X_test))
+        mlflow.log_param("n_classes", len(clf_model.classes_))
+        mlflow.log_param("classes", list(clf_model.classes_))
+        # Matrice de confusion sauvegardée comme artefact texte
+        cm_path = Path("artifacts") / "confusion_matrix.txt"
+        cm_path.parent.mkdir(exist_ok=True)
+        with open(cm_path, "w", encoding="utf-8") as f:
+            f.write(f"Classes: {list(clf_model.classes_)}\n")
+            f.write(np.array2string(test_cm))
+        mlflow.log_artifact(str(cm_path))
+        mlflow.sklearn.log_model(
+            clf_model, name="model",
+            registered_model_name="eco_smart_classifier",
+        )
 
 
 # ─── 10. EXPORT JOBLIB POUR FASTAPI ──────────────────────────────
 ARTIFACTS_DIR = Path("artifacts")
 ARTIFACTS_DIR.mkdir(exist_ok=True)
 
+joblib.dump(preprocessor, ARTIFACTS_DIR / "preprocessor.joblib")  # ColumnTransformer fitté
 joblib.dump(scaler,     ARTIFACTS_DIR / "scaler.joblib")
 joblib.dump(encoder,    ARTIFACTS_DIR / "encoder.joblib")
 joblib.dump(tfidf,      ARTIFACTS_DIR / "tfidf.joblib")

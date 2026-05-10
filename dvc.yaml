@@ -1,0 +1,99 @@
+# DVC pipeline — reproduit l'entraînement complet via `dvc repro`
+# Module 6 (MLOps) du cahier des charges.
+#
+# Initialiser DVC dans le projet :
+#   dvc init
+#   dvc repro
+#
+# Note : les artifacts/ et le dataset CSV sont à versionner via DVC,
+# pas dans Git (cf. .gitignore).
+
+stages:
+  train:
+    cmd: python nettoyage.py
+    deps:
+      - nettoyage.py
+      - nlp_utils.py
+      - dataset_ProjetML_2026.csv
+    outs:
+      - artifacts/scaler.joblib
+      - artifacts/encoder.joblib
+      - artifacts/tfidf.joblib
+      - artifacts/model.joblib
+      - artifacts/clf_model.joblib
+      - artifacts/meta.joblib
+    desc: >-
+      Entraîne le pipeline supervisé (régression Prix_Revente +
+      classification Categorie) avec GridSearchCV sur 4 régresseurs
+      et 2 classifieurs. Logue toutes les expériences dans MLflow.
+
+  cluster:
+    cmd: python clustering.py
+    deps:
+      - clustering.py
+      - dataset_ProjetML_2026.csv
+    outs:
+      - artifacts/clustering_elbow.png
+      - artifacts/clustering_pca.png
+      - artifacts/clustering_summary.txt
+    desc: >-
+      Module 3 — clustering non supervisé (KMeans + Elbow + PCA 2D).
+
+  vectorizers_benchmark:
+    cmd: python benchmark_vectorizers.py
+    deps:
+      - benchmark_vectorizers.py
+      - nlp_utils.py
+      - dataset_ProjetML_2026.csv
+    outs:
+      - artifacts/vectorizer_benchmark.txt
+    desc: >-
+      Module 4 — comparaison BoW / TF-IDF / Word2Vec / FastText
+      sur la classification de Categorie depuis le texte seul.
+
+  shap:
+    cmd: python shap_analysis.py
+    deps:
+      - shap_analysis.py
+      - nlp_utils.py
+      - dataset_ProjetML_2026.csv
+      - artifacts/model.joblib
+      - artifacts/clf_model.joblib
+      - artifacts/scaler.joblib
+      - artifacts/encoder.joblib
+      - artifacts/tfidf.joblib
+      - artifacts/meta.joblib
+    outs:
+      - artifacts/shap_classification.png
+      - artifacts/shap_regression.png
+      - artifacts/shap_summary.txt
+    desc: >-
+      Analyse SHAP des deux modèles finaux (TreeExplainer pour RF / HistGB).
+
+  monitoring:
+    cmd: python monitoring.py
+    deps:
+      - monitoring.py
+      - nlp_utils.py
+      - dataset_ProjetML_2026.csv
+    outs:
+      - artifacts/monitoring_report.html
+      - artifacts/monitoring_summary.txt
+    desc: >-
+      Module 6 — monitoring data drift (Evidently) + text drift
+      (Jensen-Shannon) + tests KS par feature numérique.
+
+  tests:
+    cmd: pytest tests/ -q
+    deps:
+      - tests/
+      - nettoyage.py
+      - main.py
+      - nlp_utils.py
+      - artifacts/scaler.joblib
+      - artifacts/encoder.joblib
+      - artifacts/tfidf.joblib
+      - artifacts/model.joblib
+      - artifacts/clf_model.joblib
+      - artifacts/meta.joblib
+    desc: Tests pytest (44 tests — schéma, NLP, artefacts, API).

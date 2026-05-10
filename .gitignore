@@ -1,4 +1,41 @@
-.vscode/
-.ipynb_checkpoints/
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+training_log.txt
+clustering_log.txt
+*.log
+
+# MLflow tracking (optionnel : à versionner via DVC plutôt que Git)
+mlruns/
+
+# Données et modèles : ne PAS commiter dans Git (à versionner via DVC)
+artifacts/*.joblib
+artifacts/*.png
+artifacts/*.txt
+!artifacts/.gitkeep
+
+# Cleaned dataset (régénérable)
+cleaned_dataset.csv
